@@ -114,3 +114,8 @@ The MVP intentionally avoids authentication, push notifications, AI, shared acco
 - Mobile-first Android layout with bottom navigation and touch-friendly controls
 - Responsive cards, task rows, forms, and bottom-sheet modals
 - Safe-area support for modern phones
+
+
+## UI scope
+
+This version is intentionally optimized for a clean desktop experience. Mobile/Android-specific navigation and responsive layout configuration have been removed. Dark mode remains available.
