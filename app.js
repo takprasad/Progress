@@ -20,6 +20,13 @@ const navTitles = {
 };
 
 let state = loadState();
+state.tasks = Array.isArray(state.tasks) ? state.tasks : [];
+state.goals = Array.isArray(state.goals) ? state.goals : [];
+state.habits = Array.isArray(state.habits) ? state.habits : [];
+state.ideas = Array.isArray(state.ideas) ? state.ideas : [];
+state.inbox = Array.isArray(state.inbox) ? state.inbox : [];
+state.reviews = state.reviews && typeof state.reviews === 'object' ? state.reviews : {};
+state.habitLogs = state.habitLogs && typeof state.habitLogs === 'object' ? state.habitLogs : {};
 state.settings = {...defaultState.settings, ...(state.settings||{})};
 let config = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{"apiUrl":""}');
 let currentView = 'today';
@@ -178,6 +185,7 @@ function renderToday(){
         <div class="hero-title-row"><div><h2>${completed}/${tasks.length} tasks completed</h2><p class="hero-copy">Keep the day moving. Your goals can fill the gaps when you need them.</p></div><div class="hero-score">${score.score}<span>%</span></div></div>
         <div class="metric-line"><span>Daily task score</span><strong>${score.score}%</strong></div>
         <div class="progress-track"><div class="progress-fill" style="width:${score.score}%"></div></div>
+        <div class="hero-habit-summary"><span>Habits today</span><strong>${habits.filter(h=>isHabitDone(h.id,date)).length}/${habits.length}</strong></div>
       </section>
       <section class="card habits-today-card">
         <div class="card-header"><div><h2>Today's habits</h2><div class="muted small">A quick check-in keeps them visible.</div></div><button class="ghost-btn compact-btn" data-view="habits">View all</button></div>
@@ -320,7 +328,12 @@ function setupEvents(){
   $('#modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop')closeModal();});
   $('#quickAddBtn').addEventListener('click',()=>taskForm());
   $('#captureBtn').addEventListener('click',()=>captureForm());
-  $('#themeToggle').addEventListener('click',()=>{state.settings.theme=(state.settings.theme||'system')==='dark'?'light':'dark';save();applyTheme();});
+  $('#themeToggle').addEventListener('click',()=>{
+    state.settings.theme=(state.settings.theme||'system')==='dark'?'light':'dark';
+    save();
+    applyTheme();
+    showToast(state.settings.theme==='dark'?'Dark mode enabled':'Light mode enabled');
+  });
 }
 
 setupEvents();

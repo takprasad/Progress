@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=20260927-3" />
 </head>
 <body>
   <div class="app-shell">
@@ -52,6 +52,16 @@
     <div class="modal" id="modal"></div>
   </div>
 
-  <script src="app.js"></script>
+  <script>
+  // Apply saved theme before the app loads to avoid a flash and ensure the
+  // GitHub Pages build always honors the saved light/dark preference.
+  try {
+    const saved = JSON.parse(localStorage.getItem('progress_state_v1') || '{}');
+    const theme = saved.settings?.theme || 'system';
+    const dark = theme === 'dark' || (theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  } catch (_) {}
+</script>
+<script src="app.js?v=20260927-3"></script>
 </body>
 </html>
