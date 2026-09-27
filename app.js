@@ -20,19 +20,14 @@ const navTitles = {
 };
 
 let state = loadState();
-state.tasks = Array.isArray(state.tasks) ? state.tasks : [];
-state.goals = Array.isArray(state.goals) ? state.goals : [];
-state.habits = Array.isArray(state.habits) ? state.habits : [];
-state.ideas = Array.isArray(state.ideas) ? state.ideas : [];
-state.inbox = Array.isArray(state.inbox) ? state.inbox : [];
-state.reviews = state.reviews && typeof state.reviews === 'object' ? state.reviews : {};
-state.habitLogs = state.habitLogs && typeof state.habitLogs === 'object' ? state.habitLogs : {};
 state.settings = {...defaultState.settings, ...(state.settings||{})};
 let config = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{"apiUrl":""}');
 let currentView = 'today';
+let plannerDate = todayISO();
 
 const $ = (sel) => document.querySelector(sel);
 const todayISO = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const addDays = (iso, amount) => { const d=new Date(`${iso}T12:00:00`); d.setDate(d.getDate()+amount); return d.toISOString().slice(0,10); };
 const uid = (prefix='id') => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
 const esc = (v='') => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const fmtDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, {weekday:'long', day:'numeric', month:'long', year:'numeric'});
@@ -130,8 +125,7 @@ function activeGoalCandidates(date){
   return state.goals.filter(g=>g.active!==false && g.endDate>=date && goalPercent(g)<100 && goalPlanningMinutes(g)>0)
     .sort((a,b)=>goalWeight(b.period)-goalWeight(a.period) || daysRemaining(a)-daysRemaining(b));
 }
-function autoPlanToday({silent=false}={}){
-  const date=todayISO();
+function autoPlanToday({silent=false,date=todayISO()}={}){
   const added=[]; const candidates=activeGoalCandidates(date);
   if(!candidates.length){ if(!silent)showToast('No measurable goal planning time is configured. Add it in Goals.'); return []; }
   const slotCountByGoal={};
@@ -157,7 +151,7 @@ function autoPlanToday({silent=false}={}){
     };
     state.tasks.push(task); added.push(task); slotCountByGoal[chosen.id]=(slotCountByGoal[chosen.id]||0)+1;
   }
-  save(); render();
+  save(); added.forEach(t=>syncIfConnected('save',t)); render();
   if(!silent) showToast(added.length?`Added ${added.length} goal block${added.length>1?'s':''}.`:'No goal blocks needed.');
   return added;
 }
@@ -185,7 +179,6 @@ function renderToday(){
         <div class="hero-title-row"><div><h2>${completed}/${tasks.length} tasks completed</h2><p class="hero-copy">Keep the day moving. Your goals can fill the gaps when you need them.</p></div><div class="hero-score">${score.score}<span>%</span></div></div>
         <div class="metric-line"><span>Daily task score</span><strong>${score.score}%</strong></div>
         <div class="progress-track"><div class="progress-fill" style="width:${score.score}%"></div></div>
-        <div class="hero-habit-summary"><span>Habits today</span><strong>${habits.filter(h=>isHabitDone(h.id,date)).length}/${habits.length}</strong></div>
       </section>
       <section class="card habits-today-card">
         <div class="card-header"><div><h2>Today's habits</h2><div class="muted small">A quick check-in keeps them visible.</div></div><button class="ghost-btn compact-btn" data-view="habits">View all</button></div>
@@ -211,15 +204,29 @@ function taskRow(t){
   return `<div class="task-row" data-task="${t.id}"><button class="check ${status}" data-action="toggle-task" data-id="${t.id}">${t.completed?'✓':''}</button><div><div class="task-title ${status}">${esc(t.title)}</div><div class="task-meta"><span>${t.startTime||'Anytime'} ${t.durationMin?`· ${t.durationMin}m`:''}</span><span class="badge ${t.priority}">${t.priority}</span>${goal?`<span class="badge ${goal.period}">${goal.period}</span>`:''}</div></div><div class="task-actions"><button class="icon-btn" title="Edit" data-action="edit-task" data-id="${t.id}">✎</button><button class="icon-btn" title="Delete" data-action="delete-task" data-id="${t.id}">×</button></div></div>`;
 }
 function goalCard(g){
-  const p=goalPercent(g), pace=goalPaceStatus(g), current=goalProgress(g);
-  return `<div class="goal-item"><div class="goal-top"><div><div class="goal-title">${esc(g.title)}</div><div class="goal-sub">${g.period} · ${current} / ${g.target} ${esc(g.unit||'')}</div></div><span class="badge ${pace.cls}">${pace.label}</span></div><div class="goal-progress"><div class="goal-numbers"><span>${p}% complete</span><span>${daysRemaining(g)}d left</span></div><div class="progress-track"><div class="progress-fill" style="width:${p}%"></div></div></div></div>`;
+  const p=goalPercent(g), pace=goalPaceStatus(g), current=goalProgress(g), completed=p>=100;
+  return `<div class="goal-item ${completed?'goal-complete':''}">
+    <div class="goal-top">
+      <div><div class="goal-title">${esc(g.title)}</div><div class="goal-sub">${g.period} · ${current} / ${g.target} ${esc(g.unit||'')}</div></div>
+      <div class="goal-actions"><span class="badge ${completed?'low':pace.cls}">${completed?'Completed':pace.label}</span>
+      <button class="icon-btn" title="Add progress" data-action="goal-progress" data-id="${g.id}">＋</button>
+      <button class="icon-btn" title="Edit goal" data-action="edit-goal" data-id="${g.id}">✎</button></div>
+    </div>
+    <div class="goal-progress"><div class="goal-numbers"><span>${p}% complete</span><span>${daysRemaining(g)}d left</span></div><div class="progress-track"><div class="progress-fill" style="width:${p}%"></div></div></div>
+  </div>`;
 }
 
 function renderPlanner(){
-  const date=todayISO(), tasks=getTasksForDate(date).filter(t=>t.startTime).sort((a,b)=>a.startTime.localeCompare(b.startTime));
-  $('#viewContainer').innerHTML=`<section class="card"><div class="card-header"><div><h2>Day planner</h2><div class="muted small">Goal blocks are created only in available slots.</div></div><div><button class="ghost-btn" data-action="plan-goals">Auto-fill goals</button> <button class="primary-btn" data-action="quick-task">+ Task</button></div></div>${tasks.length?`<div class="timeline">${tasks.map(t=>`<div class="timeline-row"><div class="timeline-time">${t.startTime}</div><div class="timeline-line"><div class="timeline-dot"></div></div><div class="timeline-card"><strong>${esc(t.title)}</strong><div class="task-meta">${t.durationMin||60}m · ${t.completed?'Completed':'Planned'} ${t.goalId?'· Goal':''}</div></div></div>`).join('')}</div>`:`<div class="empty">No timed tasks. Add a task or let the planner fill your free time.</div>`}</section>`;
+  const date=plannerDate, tasks=getTasksForDate(date).filter(t=>t.startTime).sort((a,b)=>a.startTime.localeCompare(b.startTime));
+  $('#viewContainer').innerHTML=`<section class="card">
+    <div class="card-header">
+      <div><h2>Day planner</h2><div class="muted small">Plan any day. Goal blocks are created only in available slots.</div></div>
+      <div><button class="ghost-btn" data-action="planner-today">Today</button> <button class="ghost-btn" data-action="planner-prev">←</button> <button class="ghost-btn" data-action="planner-next">→</button> <button class="ghost-btn" data-action="plan-goals">Auto-fill goals</button> <button class="primary-btn" data-action="quick-task">+ Task</button></div>
+    </div>
+    <div class="planner-date"><strong>${fmtDate(date)}</strong><span class="muted small">${dailyTaskScore(date).score}% task score</span></div>
+    ${tasks.length?`<div class="timeline">${tasks.map(t=>`<div class="timeline-row"><div class="timeline-time">${t.startTime}</div><div class="timeline-line"><div class="timeline-dot"></div></div><div class="timeline-card"><strong>${esc(t.title)}</strong><div class="task-meta">${t.durationMin||60}m · ${t.completed?'Completed':'Planned'} ${t.goalId?'· Goal':''}</div></div></div>`).join('')}</div>`:`<div class="empty">No timed tasks. Add a task or let the planner fill your free time.</div>`}
+  </section>`;
 }
-
 function renderTasks(){
   const tasks=state.tasks.slice().sort((a,b)=>b.date.localeCompare(a.date)||String(a.startTime||'').localeCompare(String(b.startTime||'')));
   $('#viewContainer').innerHTML=`<section class="card"><div class="card-header"><div><h2>All tasks</h2><div class="muted small">Weighted scores reward important work and goal progress.</div></div><button class="primary-btn" data-action="quick-task">+ Add task</button></div>${tasks.length?`<div class="task-list">${tasks.map(taskRow).join('')}</div>`:`<div class="empty">No tasks yet.</div>`}</section>`;
@@ -232,7 +239,7 @@ function renderGoals(){
 
 function renderHabits(){
   const days=[-6,-5,-4,-3,-2,-1,0].map(d=>{const x=new Date();x.setDate(x.getDate()+d);return x.toISOString().slice(0,10)});
-  $('#viewContainer').innerHTML=`<section class="card"><div class="card-header"><div><h2>Habits</h2><div class="muted small">Consistency matters more than a perfect streak.</div></div><button class="primary-btn" data-action="new-habit">+ Habit</button></div>${state.habits.length?`<div class="habit-grid"><div></div>${days.map(d=>`<div>${new Date(`${d}T12:00:00`).toLocaleDateString(undefined,{weekday:'narrow'})}</div>`).join('')}${state.habits.map(h=>`<div class="habit-name"><strong>${esc(h.icon||'•')} ${esc(h.name)}</strong><div class="small muted">${habitStats(h).score}% · ${habitStats(h).streak}d streak</div></div>${days.map(d=>`<button class="habit-cell ${isHabitDone(h.id,d)?'done':''}" data-action="toggle-habit" data-id="${h.id}" data-date="${d}">${isHabitDone(h.id,d)?'✓':''}</button>`).join('')}`).join('')}</div>`:`<div class="empty">Add your first habit.</div>`}</section>`;
+  $('#viewContainer').innerHTML=`<section class="card"><div class="card-header"><div><h2>Habits</h2><div class="muted small">Consistency matters more than a perfect streak.</div></div><button class="primary-btn" data-action="new-habit">+ Habit</button></div>${state.habits.length?`<div class="habit-grid"><div></div>${days.map(d=>`<div>${new Date(`${d}T12:00:00`).toLocaleDateString(undefined,{weekday:'narrow'})}</div>`).join('')}${state.habits.map(h=>`<div class="habit-name"><strong>${esc(h.icon||'•')} ${esc(h.name)}</strong><div class="small muted">${habitStats(h).score}% · ${habitStats(h).streak}d streak · ${esc(h.frequency||'daily')}</div><button class="icon-btn" title="Edit habit" data-action="edit-habit" data-id="${h.id}">✎</button></div>${days.map(d=>`<button class="habit-cell ${isHabitDone(h.id,d)?'done':''}" data-action="toggle-habit" data-id="${h.id}" data-date="${d}">${isHabitDone(h.id,d)?'✓':''}</button>`).join('')}`).join('')}</div>`:`<div class="empty">Add your first habit.</div>`}</section>`;
 }
 function habitStats(h){
   let score=0; for(let i=0;i<30;i++){const d=new Date();d.setDate(d.getDate()-i);if(isHabitDone(h.id,d.toISOString().slice(0,10)))score++;}
@@ -274,10 +281,42 @@ function goalForm(period='weekly', goal=null){
   openModal(`<div class="card-header"><div><h2>${goal?'Edit goal':'Add goal'}</h2><div class="muted small">Make the outcome measurable.</div></div><button class="icon-btn" data-action="close-modal">×</button></div><form id="goalForm" class="form-grid"><div class="field full"><label>Goal</label><input name="title" required placeholder="e.g. Finish 20 hours of ML course" value="${esc(g.title||'')}"></div><div class="field"><label>Period</label><select name="period"><option value="weekly" ${period==='weekly'?'selected':''}>Weekly</option><option value="monthly" ${period==='monthly'?'selected':''}>Monthly</option><option value="yearly" ${period==='yearly'?'selected':''}>Yearly</option></select></div><div class="field"><label>Target number</label><input name="target" type="number" step="0.01" min="0.01" required value="${g.target||20}"></div><div class="field"><label>Unit</label><input name="unit" placeholder="hours / books / sessions" value="${esc(g.unit||'hours')}"></div><div class="field"><label>Tracking mode</label><select name="mode"><option value="time" ${g.mode==='time'?'selected':''}>Time-based</option><option value="count" ${g.mode==='count'?'selected':''}>Count-based</option><option value="manual" ${g.mode==='manual'?'selected':''}>Manual</option></select></div><div class="field"><label>Current progress</label><input name="current" type="number" step="0.01" min="0" value="${g.current||0}"></div><div class="field"><label>Planning time across this goal (minutes)</label><input name="planningMinutes" type="number" min="0" value="${g.planningMinutes||''}" placeholder="e.g. 1200"></div><div class="field"><label>Start date</label><input name="startDate" type="date" value="${g.startDate||todayISO()}"></div><div class="field"><label>End date</label><input name="endDate" type="date" required value="${g.endDate||goalEndDate(period)}"></div><div class="field full"><label>Notes</label><textarea name="notes">${esc(g.notes||'')}</textarea></div><div class="form-actions field full"><button type="button" class="ghost-btn" data-action="close-modal">Cancel</button><button class="primary-btn">Save goal</button></div></form>`);
   $('#goalForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.target);const obj={id:g.id||uid('goal'),title:fd.get('title').trim(),period:fd.get('period'),target:Number(fd.get('target')),unit:fd.get('unit'),mode:fd.get('mode'),current:Number(fd.get('current')||0),startDate:fd.get('startDate'),endDate:fd.get('endDate'),active:true,autoCount:false,planningMinutes:Number(fd.get('planningMinutes')||0),notes:fd.get('notes')};if(g.id){const i=state.goals.findIndex(x=>x.id===g.id);state.goals[i]=obj;}else state.goals.push(obj);save();closeModal();render();syncIfConnected('saveGoal',obj);showToast('Goal saved');});
 }
+function goalProgressForm(goal){
+  const current=goalProgress(goal);
+  openModal(`<div class="card-header"><div><h2>Add progress</h2><div class="muted small">${esc(goal.title)} · current ${current} ${esc(goal.unit||'')}</div></div><button class="icon-btn" data-action="close-modal">×</button></div>
+  <form id="goalProgressForm" class="form-grid">
+    <div class="field full"><label>Amount (${esc(goal.unit||'units')})</label><input name="amount" type="number" min="0.01" step="0.01" required autofocus></div>
+    <div class="form-actions field full"><button type="button" class="ghost-btn" data-action="close-modal">Cancel</button><button class="primary-btn">Save progress</button></div>
+  </form>`);
+  $('#goalProgressForm').addEventListener('submit',e=>{
+    e.preventDefault();
+    const amount=Number(new FormData(e.target).get('amount'));
+    if(!Number.isFinite(amount)||amount<=0)return;
+    const g=state.goals.find(x=>x.id===goal.id); if(!g)return;
+    g.current=Number(g.current||0)+amount;
+    save(); closeModal(); render(); syncIfConnected('saveGoal',g); showToast('Goal progress updated');
+  });
+}
 function goalEndDate(period){const d=new Date(); if(period==='weekly')d.setDate(d.getDate()+6); if(period==='monthly')d.setMonth(d.getMonth()+1); if(period==='yearly')d.setFullYear(d.getFullYear()+1); return d.toISOString().slice(0,10);}
-function habitForm(){
-  openModal(`<div class="card-header"><div><h2>Add habit</h2><div class="muted small">Make it simple enough to do consistently.</div></div><button class="icon-btn" data-action="close-modal">×</button></div><form id="habitForm" class="form-grid"><div class="field"><label>Name</label><input name="name" required placeholder="Read"></div><div class="field"><label>Icon</label><input name="icon" value="✓" maxlength="3"></div><div class="field"><label>Frequency</label><select name="frequency"><option>Daily</option><option>Weekdays</option></select></div><div class="field full"><div class="form-actions"><button type="button" class="ghost-btn" data-action="close-modal">Cancel</button><button class="primary-btn">Save habit</button></div></div></form>`);
-  $('#habitForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.target);const obj={id:uid('habit'),name:fd.get('name'),icon:fd.get('icon')||'✓',frequency:fd.get('frequency'),active:true};state.habits.push(obj);save();closeModal();render();syncIfConnected('saveHabit',obj);showToast('Habit added');});
+function habitForm(habit=null){
+  const h=habit||{};
+  openModal(`<div class="card-header"><div><h2>${habit?'Edit habit':'Add habit'}</h2><div class="muted small">Make it simple enough to do consistently.</div></div><button class="icon-btn" data-action="close-modal">×</button></div>
+  <form id="habitForm" class="form-grid">
+    <div class="field"><label>Name</label><input name="name" required placeholder="Read" value="${esc(h.name||'')}"></div>
+    <div class="field"><label>Icon</label><input name="icon" value="${esc(h.icon||'✓')}" maxlength="3"></div>
+    <div class="field"><label>Frequency</label><select name="frequency">
+      <option value="daily" ${String(h.frequency||'daily').toLowerCase()==='daily'?'selected':''}>Daily</option>
+      <option value="weekdays" ${String(h.frequency||'').toLowerCase()==='weekdays'?'selected':''}>Weekdays</option>
+    </select></div>
+    <div class="field full"><div class="form-actions"><button type="button" class="ghost-btn" data-action="close-modal">Cancel</button><button class="primary-btn">Save habit</button></div></div>
+  </form>`);
+  $('#habitForm').addEventListener('submit',e=>{
+    e.preventDefault(); const fd=new FormData(e.target);
+    const obj={id:h.id||uid('habit'),name:fd.get('name').trim(),icon:fd.get('icon')||'✓',frequency:fd.get('frequency'),active:h.active!==false};
+    if(h.id){const i=state.habits.findIndex(x=>x.id===h.id); if(i>=0) state.habits[i]=obj;}
+    else state.habits.push(obj);
+    save(); closeModal(); render(); syncIfConnected('saveHabit',obj); showToast(h.id?'Habit updated':'Habit added');
+  });
 }
 function ideaForm(){
   openModal(`<div class="card-header"><div><h2>Capture an idea</h2><div class="muted small">No need to turn it into a task yet.</div></div><button class="icon-btn" data-action="close-modal">×</button></div><form id="ideaForm" class="form-grid"><div class="field full"><label>Title</label><input name="title" required placeholder="New app idea..."></div><div class="field full"><label>Description</label><textarea name="description"></textarea></div><div class="field"><label>Status</label><select name="status"><option>New</option><option>Exploring</option><option>Building</option><option>Done</option><option>Archived</option></select></div><div class="field"><div class="form-actions"><button type="button" class="ghost-btn" data-action="close-modal">Cancel</button><button class="primary-btn">Save idea</button></div></div></form>`);
@@ -311,10 +350,16 @@ function setupEvents(){
     if(a==='close-modal') return closeModal();
     if(a==='quick-task') return taskForm();
     if(a==='new-goal') return goalForm(action.dataset.period||'weekly');
+    if(a==='edit-goal'){const g=state.goals.find(x=>x.id===action.dataset.id);if(g) return goalForm(g.period,g);}
+    if(a==='goal-progress'){const g=state.goals.find(x=>x.id===action.dataset.id);if(g) return goalProgressForm(g);}
     if(a==='new-habit') return habitForm();
+    if(a==='edit-habit'){const h=state.habits.find(x=>x.id===action.dataset.id);if(h) return habitForm(h);}
+    if(a==='planner-prev'){plannerDate=addDays(plannerDate,-1);render();return;}
+    if(a==='planner-next'){plannerDate=addDays(plannerDate,1);render();return;}
+    if(a==='planner-today'){plannerDate=todayISO();render();return;}
     if(a==='new-idea') return ideaForm();
     if(a==='capture') return captureForm();
-    if(a==='plan-goals') return autoPlanToday();
+    if(a==='plan-goals') return autoPlanToday({date: currentView==='planner' ? plannerDate : todayISO()});
     if(a==='toggle-task'){const t=state.tasks.find(x=>x.id===action.dataset.id);if(t){t.completed=!t.completed;t.progress=t.completed?100:0;save();syncIfConnected('save',t);render();}return;}
     if(a==='edit-task'){const t=state.tasks.find(x=>x.id===action.dataset.id);if(t)taskForm(t);return;}
     if(a==='delete-task'){state.tasks=state.tasks.filter(x=>x.id!==action.dataset.id);save();syncIfConnected('deleteTask',{id:action.dataset.id});render();showToast('Task deleted');return;}
@@ -328,12 +373,7 @@ function setupEvents(){
   $('#modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop')closeModal();});
   $('#quickAddBtn').addEventListener('click',()=>taskForm());
   $('#captureBtn').addEventListener('click',()=>captureForm());
-  $('#themeToggle').addEventListener('click',()=>{
-    state.settings.theme=(state.settings.theme||'system')==='dark'?'light':'dark';
-    save();
-    applyTheme();
-    showToast(state.settings.theme==='dark'?'Dark mode enabled':'Light mode enabled');
-  });
+  $('#themeToggle').addEventListener('click',()=>{state.settings.theme=(state.settings.theme||'system')==='dark'?'light':'dark';save();applyTheme();});
 }
 
 setupEvents();

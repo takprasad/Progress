@@ -17,7 +17,7 @@ function setup() {
     if (!sh) sh = ss.insertSheet(name);
     if (sh.getLastRow() === 0) sh.appendRow(headers);
   });
-  return {ok:true, message:'Progress sheets ready'};
+  return {ok:true, message:'DayFlow sheets ready'};
 }
 
 function doGet(e) {
@@ -25,7 +25,7 @@ function doGet(e) {
     setup();
     const action = e && e.parameter ? e.parameter.action : 'bootstrap';
     if (action === 'bootstrap') return json({ok:true, state:readState_()});
-    return json({ok:true,message:'Progress API is running'});
+    return json({ok:true,message:'DayFlow API is running'});
   } catch (err) { return json({ok:false,error:String(err)}); }
 }
 
