@@ -205,11 +205,3 @@ body { background: var(--bg); color: var(--text); transition: background .18s ea
 :root[data-theme="dark"] .score-ring { background: conic-gradient(var(--accent) calc(var(--score) * 1%), var(--surface-2) 0); }
 :root[data-theme="dark"] .toast { background: #edf1fb; color: #11182a; }
 
-
-/* Android parity: goal actions, completed goals, and multi-day planner controls */
-.goal-actions { display:flex; align-items:center; gap:5px; }
-.goal-complete { border-color: rgba(32,164,107,.35); background: var(--green-soft); }
-.goal-complete .goal-title { color: var(--green); }
-.planner-date { display:flex; justify-content:space-between; align-items:center; padding: 4px 2px 16px; }
-.habit-name { position:relative; }
-.habit-name .icon-btn { position:absolute; right:0; top:-5px; }
