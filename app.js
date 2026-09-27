@@ -159,7 +159,7 @@ function render(){
   applyTheme();
   $('#dateLabel').textContent = new Date().toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
   $('#viewTitle').textContent = navTitles[currentView] || 'Today';
-  document.querySelectorAll('.nav-item[data-view], .mobile-nav-item[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===currentView));
+  document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===currentView));
   $('#connectionPill').textContent = config.apiUrl ? 'Sheets connected' : 'Local mode';
   const views={today:renderToday,planner:renderPlanner,tasks:renderTasks,goals:renderGoals,habits:renderHabits,ideas:renderIdeas,review:renderReview,calendar:renderCalendar,settings:renderSettings};
   views[currentView]();
@@ -320,9 +320,7 @@ function setupEvents(){
   $('#modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop')closeModal();});
   $('#quickAddBtn').addEventListener('click',()=>taskForm());
   $('#captureBtn').addEventListener('click',()=>captureForm());
-  $('#mobileMenu').addEventListener('click',()=>$('#sidebar').classList.toggle('open'));
   $('#themeToggle').addEventListener('click',()=>{state.settings.theme=(state.settings.theme||'system')==='dark'?'light':'dark';save();applyTheme();});
-  $('#mobileQuickAdd').addEventListener('click',()=>taskForm());
 }
 
 setupEvents();
