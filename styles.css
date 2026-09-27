@@ -206,7 +206,10 @@ body { background: var(--bg); color: var(--text); transition: background .18s ea
 :root[data-theme="dark"] .toast { background: #edf1fb; color: #11182a; }
 
 
-.hero-habit-summary { margin-top: 16px; display:flex; justify-content:space-between; align-items:center; padding-top:14px; border-top:1px solid rgba(255,255,255,.12); color:#dbe1f0; font-size:13px; }
-.hero-habit-summary strong { color:#fff; font-size:15px; }
-.habits-today-card { min-height: 220px; }
-@media (min-width: 1200px) { .habits-today-card .today-habits { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+/* Android parity: goal actions, completed goals, and multi-day planner controls */
+.goal-actions { display:flex; align-items:center; gap:5px; }
+.goal-complete { border-color: rgba(32,164,107,.35); background: var(--green-soft); }
+.goal-complete .goal-title { color: var(--green); }
+.planner-date { display:flex; justify-content:space-between; align-items:center; padding: 4px 2px 16px; }
+.habit-name { position:relative; }
+.habit-name .icon-btn { position:absolute; right:0; top:-5px; }
