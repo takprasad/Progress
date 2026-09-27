@@ -11,7 +11,7 @@ const defaultState = {
   ideas: [],
   inbox: [],
   reviews: {},
-  settings: { wake: '07:00', sleep: '23:00', bufferPercent: 20 }
+  settings: { wake: '07:00', sleep: '23:00', bufferPercent: 20, theme: 'system' }
 };
 
 const navTitles = {
@@ -20,6 +20,7 @@ const navTitles = {
 };
 
 let state = loadState();
+state.settings = {...defaultState.settings, ...(state.settings||{})};
 let config = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{"apiUrl":""}');
 let currentView = 'today';
 
@@ -39,6 +40,14 @@ function loadState(){
 }
 function saveLocal(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 function save(){ saveLocal(); }
+function applyTheme(){
+  const theme=state.settings?.theme||'system';
+  const dark=theme==='dark' || (theme==='system' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme=dark?'dark':'light';
+  const btn=$('#themeToggle');
+  if(btn){ btn.textContent=dark?'☀':'☾'; btn.title=dark?'Switch to light mode':'Switch to dark mode'; btn.setAttribute('aria-label',btn.title); }
+}
+window.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change',()=>{if((state.settings?.theme||'system')==='system')applyTheme();});
 function showToast(msg){
   const el = document.createElement('div'); el.className='toast'; el.textContent=msg; document.body.appendChild(el);
   setTimeout(()=>el.remove(), 2200);
@@ -119,6 +128,7 @@ function autoPlanToday({silent=false}={}){
   const added=[]; const candidates=activeGoalCandidates(date);
   if(!candidates.length){ if(!silent)showToast('No measurable goal planning time is configured. Add it in Goals.'); return []; }
   const slotCountByGoal={};
+  const slots=availableSlots(date);
   for(const slot of slots){
     let chosen=null;
     for(const g of candidates){
@@ -146,9 +156,10 @@ function autoPlanToday({silent=false}={}){
 }
 
 function render(){
+  applyTheme();
   $('#dateLabel').textContent = new Date().toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
   $('#viewTitle').textContent = navTitles[currentView] || 'Today';
-  document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===currentView));
+  document.querySelectorAll('.nav-item[data-view], .mobile-nav-item[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===currentView));
   $('#connectionPill').textContent = config.apiUrl ? 'Sheets connected' : 'Local mode';
   const views={today:renderToday,planner:renderPlanner,tasks:renderTasks,goals:renderGoals,habits:renderHabits,ideas:renderIdeas,review:renderReview,calendar:renderCalendar,settings:renderSettings};
   views[currentView]();
@@ -159,24 +170,27 @@ function renderToday(){
   const completed=tasks.filter(t=>t.completed).length;
   const top3=tasks.filter(t=>t.top3 && !t.completed).slice(0,3);
   const goals=activeGoalCandidates(date).slice(0,3);
+  const habits=state.habits.filter(h=>h.active!==false);
   $('#viewContainer').innerHTML=`
-    <div class="grid grid-2">
-      <section class="hero">
+    <div class="dashboard-hero">
+      <section class="hero hero-main">
         <div class="small muted">TODAY'S FOCUS</div>
-        <h2 style="font-size:27px;margin:8px 0 4px">${completed}/${tasks.length} tasks completed</h2>
-        <div class="metric-line"><span>Task score</span><strong>${score.score}%</strong></div>
+        <div class="hero-title-row"><div><h2>${completed}/${tasks.length} tasks completed</h2><p class="hero-copy">Keep the day moving. Your goals can fill the gaps when you need them.</p></div><div class="hero-score">${score.score}<span>%</span></div></div>
+        <div class="metric-line"><span>Daily task score</span><strong>${score.score}%</strong></div>
         <div class="progress-track"><div class="progress-fill" style="width:${score.score}%"></div></div>
-        <div class="section" style="margin-top:20px"><div class="small muted">HABITS</div><div style="font-size:21px;font-weight:800;margin-top:4px">${hp}%</div></div>
       </section>
-      <section class="card">
-        <div class="card-header"><div><h2>Today's Top 3</h2><div class="muted small">Only the three things that matter most.</div></div><button class="ghost-btn" data-action="manage-top3">Edit</button></div>
-        ${top3.length?`<div class="task-list">${top3.map(taskRow).join('')}</div>`:`<div class="empty">Pick up to 3 tasks as your focus.</div>`}
+      <section class="card habits-today-card">
+        <div class="card-header"><div><h2>Today's habits</h2><div class="muted small">A quick check-in keeps them visible.</div></div><button class="ghost-btn compact-btn" data-view="habits">View all</button></div>
+        ${habits.length?`<div class="today-habits">${habits.slice(0,6).map(h=>{const done=isHabitDone(h.id,date);return `<button class="today-habit ${done?'done':''}" data-action="toggle-habit" data-id="${h.id}" data-date="${date}"><span class="today-habit-icon">${esc(h.icon||'✓')}</span><span class="today-habit-name">${esc(h.name)}</span><span class="today-habit-check">${done?'✓':'○'}</span></button>`}).join('')}</div>`:`<div class="empty compact-empty">Add a habit to start building consistency.</div>`}
       </section>
     </div>
     <div class="section grid grid-2">
-      <section class="card"><div class="card-header"><div><h2>Today's tasks</h2><div class="muted small">Existing tasks + goal-generated work.</div></div><button class="primary-btn" data-action="plan-goals">Fill free time</button></div>${tasks.length?`<div class="task-list">${tasks.slice().sort((a,b)=>(a.startTime||'99:99').localeCompare(b.startTime||'99:99')).map(taskRow).join('')}</div>`:`<div class="empty">Nothing planned yet. Capture something or let your goals fill the gaps.</div>`}</section>
-      <section class="card"><div class="card-header"><div><h2>Goal pressure</h2><div class="muted small">Weekly goals get first priority.</div></div><button class="ghost-btn" data-action="new-goal">+ Goal</button></div>${goals.length?`<div class="grid">${goals.map(goalCard).join('')}</div>`:`<div class="empty">Add a weekly, monthly or yearly goal.</div>`}</section>
+      <section class="card"><div class="card-header"><div><h2>Today's Top 3</h2><div class="muted small">Only the three things that matter most.</div></div><button class="ghost-btn compact-btn" data-action="manage-top3">Edit</button></div>
+        ${top3.length?`<div class="task-list">${top3.map(taskRow).join('')}</div>`:`<div class="empty">Pick up to 3 tasks as your focus.</div>`}
+      </section>
+      <section class="card"><div class="card-header"><div><h2>Goal pressure</h2><div class="muted small">Weekly → Monthly → Yearly.</div></div><button class="ghost-btn compact-btn" data-action="new-goal">+ Goal</button></div>${goals.length?`<div class="grid">${goals.map(goalCard).join('')}</div>`:`<div class="empty">Add a goal and Progress can use free time for it.</div>`}</section>
     </div>
+    <section class="section card tasks-card"><div class="card-header"><div><h2>Today's tasks</h2><div class="muted small">Existing tasks + goal-generated work.</div></div><button class="primary-btn" data-action="plan-goals">Fill free time</button></div>${tasks.length?`<div class="task-list">${tasks.slice().sort((a,b)=>(a.startTime||'99:99').localeCompare(b.startTime||'99:99')).map(taskRow).join('')}</div>`:`<div class="empty">Nothing planned yet. Capture something or let your goals fill the gaps.</div>`}</section>
     <div class="section grid grid-3">
       <div class="kpi"><div class="kpi-title">DAILY TASK SCORE</div><div class="kpi-value">${score.score}%</div><div class="muted small">${Math.round(score.earned)}/${Math.round(score.possible)} weighted points</div></div>
       <div class="kpi"><div class="kpi-title">HABIT SCORE</div><div class="kpi-value">${hp}%</div><div class="muted small">Today</div></div>
@@ -235,7 +249,7 @@ function renderCalendar(){
 }
 
 function renderSettings(){
-  $('#viewContainer').innerHTML=`<section class="card"><div class="card-header"><div><h2>Settings</h2><div class="muted small">Planner behavior and Google Sheets connection.</div></div></div><div class="form-grid"><div class="field"><label>Wake time</label><input id="setWake" type="time" value="${state.settings.wake}"></div><div class="field"><label>Sleep time</label><input id="setSleep" type="time" value="${state.settings.sleep}"></div><div class="field"><label>Keep free / buffer (%)</label><input id="setBuffer" type="number" min="0" max="70" value="${state.settings.bufferPercent}"></div><div class="field full"><label>Google Apps Script Web App URL</label><input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(config.apiUrl||'')}"></div></div><div class="form-actions"><button class="ghost-btn" data-action="export-json">Export data</button><button class="primary-btn" data-action="save-settings">Save settings</button></div><div class="section"><h3>Google Sheets</h3><p class="muted small">Paste the deployed Apps Script URL. The app can keep working in local mode until you connect it.</p></div></section>`;
+  $('#viewContainer').innerHTML=`<section class="card"><div class="card-header"><div><h2>Settings</h2><div class="muted small">Planner behavior and Google Sheets connection.</div></div></div><div class="form-grid"><div class="field"><label>Wake time</label><input id="setWake" type="time" value="${state.settings.wake}"></div><div class="field"><label>Sleep time</label><input id="setSleep" type="time" value="${state.settings.sleep}"></div><div class="field"><label>Keep free / buffer (%)</label><input id="setBuffer" type="number" min="0" max="70" value="${state.settings.bufferPercent}"></div><div class="field"><label>Appearance</label><select id="setTheme"><option value="system" ${state.settings.theme==='system'?'selected':''}>System</option><option value="light" ${state.settings.theme==='light'?'selected':''}>Light</option><option value="dark" ${state.settings.theme==='dark'?'selected':''}>Dark</option></select></div><div class="field full"><label>Google Apps Script Web App URL</label><input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(config.apiUrl||'')}"></div></div><div class="form-actions"><button class="ghost-btn" data-action="export-json">Export data</button><button class="primary-btn" data-action="save-settings">Save settings</button></div><div class="section"><h3>Google Sheets</h3><p class="muted small">Paste the deployed Apps Script URL. The app can keep working in local mode until you connect it.</p></div></section>`;
 }
 
 function openModal(html){ $('#modal').innerHTML=html; $('#modalBackdrop').classList.remove('hidden'); }
@@ -298,7 +312,7 @@ function setupEvents(){
     if(a==='delete-task'){state.tasks=state.tasks.filter(x=>x.id!==action.dataset.id);save();syncIfConnected('deleteTask',{id:action.dataset.id});render();showToast('Task deleted');return;}
     if(a==='toggle-habit'){const key=`${action.dataset.id}_${action.dataset.date}`;if(state.habitLogs[key])delete state.habitLogs[key];else state.habitLogs[key]=true;save();syncIfConnected('habitLog',{habitId:action.dataset.id,date:action.dataset.date,completed:!!state.habitLogs[key]});render();return;}
     if(a==='save-review') return saveReview();
-    if(a==='save-settings'){state.settings.wake=$('#setWake').value;state.settings.sleep=$('#setSleep').value;state.settings.bufferPercent=Number($('#setBuffer').value);config.apiUrl=$('#apiUrl').value.trim();localStorage.setItem(CONFIG_KEY,JSON.stringify(config));save();render();syncIfConnected('saveSettings',state.settings);showToast('Settings saved'); if(config.apiUrl)pullFromSheets(); return;}
+    if(a==='save-settings'){state.settings.wake=$('#setWake').value;state.settings.sleep=$('#setSleep').value;state.settings.bufferPercent=Number($('#setBuffer').value);state.settings.theme=$('#setTheme').value;config.apiUrl=$('#apiUrl').value.trim();localStorage.setItem(CONFIG_KEY,JSON.stringify(config));save();render();syncIfConnected('saveSettings',state.settings);showToast('Settings saved'); if(config.apiUrl)pullFromSheets(); return;}
     if(a==='export-json'){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='progress-backup.json';a.click();URL.revokeObjectURL(url);return;}
     if(a==='delete-idea'){state.ideas=state.ideas.filter(x=>x.id!==action.dataset.id);save();render();return;}
     if(a==='open-day'){const d=action.dataset.date;const tasks=getTasksForDate(d);openModal(`<div class="card-header"><div><h2>${fmtDate(d)}</h2><div class="muted small">Task score ${dailyTaskScore(d).score}%</div></div><button class="icon-btn" data-action="close-modal">×</button></div>${tasks.length?`<div class="task-list">${tasks.map(taskRow).join('')}</div>`:`<div class="empty">No tasks recorded.</div>`}`);return;}
@@ -307,6 +321,8 @@ function setupEvents(){
   $('#quickAddBtn').addEventListener('click',()=>taskForm());
   $('#captureBtn').addEventListener('click',()=>captureForm());
   $('#mobileMenu').addEventListener('click',()=>$('#sidebar').classList.toggle('open'));
+  $('#themeToggle').addEventListener('click',()=>{state.settings.theme=(state.settings.theme||'system')==='dark'?'light':'dark';save();applyTheme();});
+  $('#mobileQuickAdd').addEventListener('click',()=>taskForm());
 }
 
 setupEvents();

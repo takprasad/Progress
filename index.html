@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Progress — Goal Driven Day Planner</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -37,14 +37,23 @@
           <h1 id="viewTitle">Today</h1>
         </div>
         <div class="top-actions">
-          <button class="ghost-btn" id="captureBtn">＋ Capture</button>
-          <button class="primary-btn" id="quickAddBtn">＋ Task</button>
+          <button class="icon-btn top-icon" id="themeToggle" title="Toggle dark mode" aria-label="Toggle dark mode">☾</button>
+          <button class="ghost-btn top-capture" id="captureBtn">＋ Capture</button>
+          <button class="primary-btn top-task" id="quickAddBtn">＋ Task</button>
         </div>
       </header>
 
       <div id="viewContainer"></div>
     </main>
   </div>
+
+  <nav class="mobile-bottom-nav" aria-label="Primary navigation">
+    <button class="mobile-nav-item active" data-view="today">⌂<span>Today</span></button>
+    <button class="mobile-nav-item" data-view="planner">◷<span>Planner</span></button>
+    <button class="mobile-nav-item mobile-nav-add" id="mobileQuickAdd">＋<span>Task</span></button>
+    <button class="mobile-nav-item" data-view="habits">↻<span>Habits</span></button>
+    <button class="mobile-nav-item" data-view="goals">◎<span>Goals</span></button>
+  </nav>
 
   <!-- Modal -->
   <div class="modal-backdrop hidden" id="modalBackdrop">

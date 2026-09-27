@@ -105,3 +105,12 @@ Task weighting is based on priority and whether the task is tied to a goal. Goal
 ## Notes
 
 The MVP intentionally avoids authentication, push notifications, AI, shared accounts and complex recurring-task rules. These can be added later without changing the basic Sheet structure.
+
+
+## UI updates
+
+- Light, dark, and system appearance modes
+- Habits visible directly on the Today dashboard
+- Mobile-first Android layout with bottom navigation and touch-friendly controls
+- Responsive cards, task rows, forms, and bottom-sheet modals
+- Safe-area support for modern phones
