@@ -205,3 +205,8 @@ body { background: var(--bg); color: var(--text); transition: background .18s ea
 :root[data-theme="dark"] .score-ring { background: conic-gradient(var(--accent) calc(var(--score) * 1%), var(--surface-2) 0); }
 :root[data-theme="dark"] .toast { background: #edf1fb; color: #11182a; }
 
+
+.hero-habit-summary { margin-top: 16px; display:flex; justify-content:space-between; align-items:center; padding-top:14px; border-top:1px solid rgba(255,255,255,.12); color:#dbe1f0; font-size:13px; }
+.hero-habit-summary strong { color:#fff; font-size:15px; }
+.habits-today-card { min-height: 220px; }
+@media (min-width: 1200px) { .habits-today-card .today-habits { grid-template-columns: repeat(2, minmax(0,1fr)); } }
